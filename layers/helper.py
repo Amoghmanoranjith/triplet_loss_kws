@@ -3,8 +3,7 @@ import torch
 import nemo
 from nemo.collections.asr.metrics import classification_accuracy, word_error_rate
 
-logging = nemo.logging
-
+import logging
 
 def monitor_classification_triplet_training_progress(tensors: list, eval_metric=None, tb_logger=None):
     """
