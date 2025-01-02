@@ -1,7 +1,7 @@
 import os
 import nemo
 
-logging = nemo.logging
+import logging
 from nemo.core.callbacks import ActionCallback
 import tensorflow as tf
 import tensorboard as tb
