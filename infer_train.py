@@ -9,7 +9,7 @@ from ruamel.yaml import YAML
 
 from models.resnet import Res8, Res15
 
-logging = nemo.logging
+import logging
 from layers.l2 import L2Regularizer
 import json
 from models.fc import LinearLayer
