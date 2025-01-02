@@ -21,7 +21,7 @@ import argparse
 
 import numpy as np
 
-logging = nemo.logging
+import logging
 from layers.l2 import L2Regularizer
 
 from layers.embedding_callback import EmbeddingEvaluatorCallback
