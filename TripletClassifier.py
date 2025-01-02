@@ -13,7 +13,7 @@ from nemo.collections.asr.helpers import (
 from models.resnet import Res15, Res8
 import argparse
 
-logging = nemo.logging
+import logging 
 from models.classifier import ClassificationNet
 from layers.l2 import L2Regularizer
 
