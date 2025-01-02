@@ -9,7 +9,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     _WANDB_AVAILABLE = False
 
-logging = nemo.logging
+import logging
 from nemo.core.callbacks import ActionCallback
 
 import tensorflow as tf
