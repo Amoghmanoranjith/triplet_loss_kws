@@ -1,5 +1,5 @@
 import torch.nn.functional as F
-from nemo import logging
+import logging
 from nemo.backends.pytorch import NonTrainableNM
 from nemo.core.neural_types import *
 from nemo.utils.decorators import add_port_docs
