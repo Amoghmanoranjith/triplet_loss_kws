@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
-from nemo import logging
+import logging
 from nemo.backends.pytorch import DataLayerNM
 from nemo.collections.asr.parts.dataset import AudioLabelDataset, seq_collate_fn
 from nemo.collections.asr.parts.features import WaveformFeaturizer
