@@ -34,7 +34,7 @@ args = parser.parse_args()
 os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
 
 data_dir = '.'
-manifests = json.load(open('manifests.json', 'r'))
+manifests = json.load(open('/content/triplet_loss_kws/manifests.json', 'r'))
 train_dataset = manifests[args.manifest]['train']
 test_dataset = manifests[args.manifest]['test']
 
