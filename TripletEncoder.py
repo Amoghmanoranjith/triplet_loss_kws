@@ -74,7 +74,7 @@ yaml = YAML(typ="safe")
 
 config_name = f'words{args.manifest}.yaml'
 
-with open("configs/" + config_name) as f:
+with open("/content/triplet_loss_kws/configs/" + config_name) as f:
     jasper_params = yaml.load(f)
 
 labels = jasper_params['labels']
