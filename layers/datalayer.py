@@ -1,66 +1,103 @@
+# Required imports for data processing, neural networks, and audio handling
 from functools import partial
 from typing import Any, Dict, List, Optional, Union
-
 import numpy as np
 import torch
 import logging
 from nemo.backends.pytorch import DataLayerNM
 from nemo.collections.asr.parts.dataset import AudioLabelDataset, seq_collate_fn
 from nemo.collections.asr.parts.features import WaveformFeaturizer
-from nemo.collections.asr.parts.perturb import AudioAugmentor
-from nemo.collections.asr.parts.perturb import perturbation_types
+from nemo.collections.asr.parts.perturb import AudioAugmentor, perturbation_types
 from nemo.core.neural_types import *
 from torch.utils.data.sampler import BatchSampler
 
-
+# Custom Batch Sampler to balance classes during batching
 class BalancedBatchSampler(BatchSampler):
     """
-    BatchSampler - from a MNIST-like dataset, samples n_classes and within these classes samples n_samples.
-    Returns batches of size n_classes * n_samples
+    Custom BatchSampler for datasets with imbalanced classes.
+    Samples a fixed number of classes (n_classes) and a fixed number of examples (n_samples) per class.
+    Returns batches of size n_classes * n_samples.
     """
 
     def __init__(self, labels, n_classes, n_samples, class_dists, class_probs, probs_num):
-        self.labels = torch.tensor(labels)
-        self.labels_set = list(set(self.labels.numpy()))
-        self.label_to_indices = {label: np.where(self.labels.numpy() == label)[0]
-                                 for label in self.labels_set}
+        """
+        Args:
+            labels (list or tensor): The class labels for the dataset.
+            n_classes (int): Number of classes to sample in a batch.
+            n_samples (int): Number of samples to pick from each class.
+            class_dists (dict): Class distances for "nearby" sampling.
+            class_probs (dict): Probabilities for class-based sampling.
+            probs_num (int): Index to select a probability distribution for batch creation.
+        """
+        self.labels = torch.tensor(labels)  # Convert labels to tensor
+        self.labels_set = list(set(self.labels.numpy()))  # Unique class labels
+        self.label_to_indices = {label: np.where(self.labels.numpy() == label)[0] 
+                                 for label in self.labels_set}  # Map label to its indices
+        
+        # Shuffle indices for each label to randomize batches
         for l in self.labels_set:
             np.random.shuffle(self.label_to_indices[l])
-        self.used_label_indices_count = {label: 0 for label in self.labels_set}
-        self.count = 0
+        
+        self.used_label_indices_count = {label: 0 for label in self.labels_set}  # Track used indices
+        self.count = 0  # Counter to track dataset iteration
         self.n_classes = n_classes
         self.n_samples = n_samples
-        self.n_dataset = len(self.labels)
-        self.batch_size = self.n_samples * self.n_classes
-        self.class_dists = class_dists
-        self.class_probs = class_probs
-        self.probs = [[1., 0., 0.],
-                      [0., 1., 0.],
-                      [0., 0., 1.],
-                      [0.5, 0.5, 0.],
-                      [0.5, 0., 0.5],
-                      [0., 0.5, 0.5],
-                      [0.33, 0.33, 0.33]]
-        self.probs = self.probs[probs_num]
+        self.n_dataset = len(self.labels)  # Total dataset size
+        self.batch_size = self.n_samples * self.n_classes  # Batch size
+        self.class_dists = class_dists  # Class distance mapping for "nearby" sampling
+        self.class_probs = class_probs  # Class probabilities for weighted sampling
+        
+        # Predefined probability distributions for sampling strategies
+        self.probs = [
+            [1., 0., 0.],  # Uniform sampling
+            [0., 1., 0.],  # Nearby sampling
+            [0., 0., 1.],  # Probability-based sampling
+            [0.5, 0.5, 0.],  # Mixed uniform and nearby
+            [0.5, 0., 0.5],  # Mixed uniform and probability
+            [0., 0.5, 0.5],  # Mixed nearby and probability
+            [0.33, 0.33, 0.33]  # Equal weight for all three
+        ]
+        self.probs = self.probs[probs_num]  # Select the desired probability distribution
 
     def pick_nearby(self, label_set, n_classes, class_dists):
-        with torch.no_grad():
-            first_labels = np.random.choice(label_set, n_classes // 2, replace=False)
-            second_labels = []
-            for label in first_labels:
-                for sec_label in class_dists[label][np.random.randint(3):]:
-                    if sec_label in label_set:
-                        second_labels.append(sec_label)
-                        break
-            return np.concatenate([first_labels, np.array(second_labels)])
+        """
+        Picks a combination of labels based on nearby distance.
+        Args:
+            label_set (list): Available labels.
+            n_classes (int): Number of classes to sample.
+            class_dists (dict): Mapping of class distances.
+        Returns:
+            numpy.ndarray: Selected labels.
+        """
+        first_labels = np.random.choice(label_set, n_classes // 2, replace=False)
+        second_labels = []
+        for label in first_labels:
+            # Pick a nearby label for each selected label
+            for sec_label in class_dists[label][np.random.randint(3):]:
+                if sec_label in label_set:
+                    second_labels.append(sec_label)
+                    break
+        return np.concatenate([first_labels, np.array(second_labels)])
 
     def pick_probs(self, label_set, n_classes, class_probs):
+        """
+        Picks labels based on class probabilities.
+        Args:
+            label_set (list): Available labels.
+            n_classes (int): Number of classes to sample.
+            class_probs (dict): Probability weights for classes.
+        Returns:
+            numpy.ndarray: Selected labels.
+        """
         return np.random.choice(label_set, n_classes, p=class_probs[label_set] / np.sum(class_probs[label_set]))
 
     def __iter__(self):
-        self.count = 0
+        """
+        Creates an iterator for the sampler.
+        """
+        self.count = 0  # Reset counter
         while self.count + self.batch_size < self.n_dataset:
-
+            # Randomly choose a sampling strategy
             chance = np.random.rand()
             if chance < self.probs[0]:
                 classes = np.random.choice(self.labels_set, self.n_classes, replace=False)
@@ -69,123 +106,86 @@ class BalancedBatchSampler(BatchSampler):
             else:
                 classes = self.pick_probs(self.labels_set, self.n_classes, self.class_probs)
 
+            # Collect indices for the selected classes
             indices = []
             for class_ in classes:
                 indices.extend(self.label_to_indices[class_][
-                               self.used_label_indices_count[class_]:self.used_label_indices_count[
-                                                                         class_] + self.n_samples])
+                               self.used_label_indices_count[class_]:self.used_label_indices_count[class_] + self.n_samples])
                 self.used_label_indices_count[class_] += self.n_samples
                 if self.used_label_indices_count[class_] + self.n_samples > len(self.label_to_indices[class_]):
                     np.random.shuffle(self.label_to_indices[class_])
                     self.used_label_indices_count[class_] = 0
-            indices = torch.tensor(list(map(int, indices)))
-            yield indices
-            self.count += self.n_classes * self.n_samples
+
+            yield torch.tensor(list(map(int, indices)))  # Yield batch indices
+            self.count += self.batch_size
 
     def __len__(self):
+        """
+        Returns the number of batches.
+        """
         return self.n_dataset // self.batch_size
 
 
-# Ported from https://github.com/NVIDIA/OpenSeq2Seq/blob/master/open_seq2seq/data/speech2text/speech_commands.py
 class BalancedAudioToSpeechLabelDataLayer(DataLayerNM):
-    """Data Layer for general speech classification.
-
-    Module which reads speech recognition with target label. It accepts comma-separated
-    JSON manifest files describing the correspondence between wav audio files
-    and their target labels. JSON files should be of the following format::
-
-        {"audio_filepath": path_to_wav_0, "duration": time_in_sec_0, "label": \
-target_label_0, "offset": offset_in_sec_0}
-        ...
-        {"audio_filepath": path_to_wav_n, "duration": time_in_sec_n, "label": \
-target_label_n, "offset": offset_in_sec_n}
-
-    Args:
-        manifest_filepath (str): Dataset parameter.
-            Path to JSON containing data.
-        labels (list): Dataset parameter.
-            List of target classes that can be output by the speech recognition model.
-        batch_size (int): batch size
-        sample_rate (int): Target sampling rate for data. Audio files will be
-            resampled to sample_rate if it is not already.
-            Defaults to 16000.
-        int_values (bool): Bool indicating whether the audio file is saved as
-            int data or float data.
-            Defaults to False.
-        min_duration (float): Dataset parameter.
-            All training files which have a duration less than min_duration
-            are dropped. Note: Duration is read from the manifest JSON.
-            Defaults to 0.1.
-        max_duration (float): Dataset parameter.
-            All training files which have a duration more than max_duration
-            are dropped. Note: Duration is read from the manifest JSON.
-            Defaults to None.
-        trim_silence (bool): Whether to use trim silence from beginning and end
-            of audio signal using librosa.effects.trim().
-            Defaults to False.
-        load_audio (bool): Dataset parameter.
-            Controls whether the dataloader loads the audio signal and
-            transcript or just the transcript.
-            Defaults to True.
-        drop_last (bool): See PyTorch DataLoader.
-            Defaults to False.
-        shuffle (bool): See PyTorch DataLoader.
-            Defaults to True.
-        num_workers (int): See PyTorch DataLoader.
-            Defaults to 0.
-        augmenter (AudioAugmentor or dict): Optional AudioAugmentor or
-            dictionary of str -> kwargs (dict) which is parsed and used
-            to initialize an AudioAugmentor.
-            Note: It is crucial that each individual augmentation has
-            a keyword `prob`, that defines a float probability in the
-            the range [0, 1] of this augmentation being applied.
-            If this keyword is not present, then the augmentation is
-            disabled and a warning is logged.
+    """
+    Data Layer for speech classification tasks, loading audio data and corresponding labels.
+    Parses JSON manifests describing audio file paths, durations, and labels.
     """
 
     @property
     def output_ports(self):
-        """Returns definitions of module output ports.
+        """
+        Defines the outputs of the Data Layer.
         """
         return {
-            'audio_signal': NeuralType(('B', 'T'), AudioSignal(freq=self._sample_rate)),
-            'a_sig_length': NeuralType(tuple('B'), LengthsType()),
-            'label': NeuralType(tuple('B'), LabelsType()),
-            'label_length': NeuralType(tuple('B'), LengthsType()),
+            'audio_signal': NeuralType(('B', 'T'), AudioSignal(freq=self._sample_rate)),  # Batched audio signals
+            'a_sig_length': NeuralType(tuple('B'), LengthsType()),  # Lengths of audio signals
+            'label': NeuralType(tuple('B'), LabelsType()),  # Corresponding labels
+            'label_length': NeuralType(tuple('B'), LengthsType()),  # Lengths of labels
         }
 
-    def __init__(
-            self,
-            *,
-            manifest_filepath: str,
-            labels: List[str],
-            batch_size: int,
-            sample_rate: int = 16000,
-            int_values: bool = False,
-            num_workers: int = 0,
-            shuffle: bool = True,
-            min_duration: Optional[float] = 0.1,
-            max_duration: Optional[float] = None,
-            trim_silence: bool = False,
-            drop_last: bool = False,
-            load_audio: bool = True,
-            augmentor: Optional[Union[AudioAugmentor, Dict[str, Dict[str, Any]]]] = None,
-            num_classes: int = 35,
-            class_dists=None,
-            class_probs=None,
-            probs_num=0
-    ):
+    def __init__(self, *, manifest_filepath: str, labels: List[str], batch_size: int, sample_rate: int = 16000,
+                 int_values: bool = False, num_workers: int = 0, shuffle: bool = True, min_duration: Optional[float] = 0.1,
+                 max_duration: Optional[float] = None, trim_silence: bool = False, drop_last: bool = False,
+                 load_audio: bool = True, augmentor: Optional[Union[AudioAugmentor, Dict[str, Dict[str, Any]]]] = None,
+                 num_classes: int = 35, class_dists=None, class_probs=None, probs_num=0):
+        """
+        Initializes the Data Layer.
+
+        Args:
+            manifest_filepath (str): Path to the JSON manifest file.
+            labels (list): List of possible class labels.
+            batch_size (int): Batch size.
+            sample_rate (int): Target sample rate for audio data.
+            int_values (bool): If True, interpret audio as int data.
+            num_workers (int): Number of worker threads for data loading.
+            shuffle (bool): If True, shuffle the data.
+            min_duration (float): Minimum duration of audio files to load.
+            max_duration (float): Maximum duration of audio files to load.
+            trim_silence (bool): If True, trim silence from audio signals.
+            drop_last (bool): If True, drop the last incomplete batch.
+            load_audio (bool): If True, load the audio data.
+            augmentor (AudioAugmentor or dict): Augmentor for data augmentation.
+            num_classes (int): Number of classes to sample in each batch.
+            class_dists (dict): Class distances for "nearby" sampling.
+            class_probs (dict): Probability weights for class sampling.
+            probs_num (int): Index to select a probability distribution.
+        """
         super(BalancedAudioToSpeechLabelDataLayer, self).__init__()
 
+        # Initialize member variables
         self._manifest_filepath = manifest_filepath
         self._labels = labels
         self._sample_rate = sample_rate
 
+        # Process augmentations if provided
         if augmentor is not None:
             augmentor = self._process_augmentations(augmentor)
 
+        # Initialize waveform featurizer
         self._featurizer = WaveformFeaturizer(sample_rate=sample_rate, int_values=int_values, augmentor=augmentor)
 
+        # Dataset parameters
         dataset_params = {
             'manifest_filepath': manifest_filepath,
             'labels': labels,
@@ -195,23 +195,38 @@ target_label_n, "offset": offset_in_sec_n}
             'trim': trim_silence,
             'load_audio': load_audio,
         }
+        # Initialize the dataset
         self._dataset = AudioLabelDataset(**dataset_params)
+
+        # Extract labels for the dataset
         labels = []
         for sample in self._dataset.collection:
             labels.append(self._dataset.label2id[sample.label])
+
+        # Initialize the data loader with the BalancedBatchSampler
         self._dataloader = torch.utils.data.DataLoader(
             dataset=self._dataset,
-            batch_sampler=BalancedBatchSampler(labels, n_classes=num_classes, n_samples=batch_size // num_classes,
+            batch_sampler=BalancedBatchSampler(labels, n_classes=num_classes,
+                                               n_samples=batch_size // num_classes,
                                                class_dists=class_dists, class_probs=class_probs, probs_num=probs_num),
-            # TODO replace with kwargs
-            collate_fn=partial(seq_collate_fn, token_pad_value=0),
+            collate_fn=partial(seq_collate_fn, token_pad_value=0),  # Collate function for batching
             num_workers=num_workers,
         )
 
     def __len__(self):
+        """
+        Returns the size of the dataset.
+        """
         return len(self._dataset)
 
     def _process_augmentations(self, augmentor) -> AudioAugmentor:
+        """
+        Processes augmentation configurations and initializes an AudioAugmentor.
+        Args:
+            augmentor (dict): Dictionary of augmentations and their parameters.
+        Returns:
+            AudioAugmentor: Initialized augmentor with specified perturbations.
+        """
         augmentations = []
         for augment_name, augment_kwargs in augmentor.items():
             prob = augment_kwargs.get('prob', None)
@@ -221,23 +236,26 @@ target_label_n, "offset": offset_in_sec_n}
                     f'Augmentation "{augment_name}" will not be applied as '
                     f'keyword argument "prob" was not defined for this augmentation.'
                 )
-
             else:
                 _ = augment_kwargs.pop('prob')
-
                 try:
                     augmentation = perturbation_types[augment_name](**augment_kwargs)
                     augmentations.append([prob, augmentation])
                 except KeyError:
                     logging.error(f"Invalid perturbation name. Allowed values : {perturbation_types.keys()}")
 
-        augmentor = AudioAugmentor(perturbations=augmentations)
-        return augmentor
+        return AudioAugmentor(perturbations=augmentations)
 
     @property
     def dataset(self):
+        """
+        Placeholder for dataset property (not implemented).
+        """
         return None
 
     @property
     def data_iterator(self):
+        """
+        Returns the data loader.
+        """
         return self._dataloader
