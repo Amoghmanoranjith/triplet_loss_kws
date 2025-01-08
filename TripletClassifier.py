@@ -78,15 +78,15 @@ eval_data_layer = nemo_asr.AudioToSpeechLabelDataLayer(
 
 data_preprocessor = nemo_asr.AudioToMelSpectrogramPreprocessor(
     sample_rate=sample_rate, 
-    normalize: "per_feature",
-    window_size: 0.025,
-    window_stride: 0.01,
-    window: "hann",
-    features: &n_mels 64,
-    frame_splicing: 1,
-    dither: 0.00001,
-    stft_conv: true,
-    n_fft: 512,
+    normalize="per_feature",
+    window_size= 0.025,
+    window_stride= 0.01,
+    window= "hann",
+    features= &n_mels 64,
+    frame_splicing= 1,
+    dither= 0.00001,
+    stft_conv= true,
+    n_fft= 512,
 )
 assert args.model in ['Res8', 'Res15', 'Quartz']
 
