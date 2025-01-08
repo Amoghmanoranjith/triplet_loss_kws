@@ -82,10 +82,9 @@ data_preprocessor = nemo_asr.AudioToMelSpectrogramPreprocessor(
     window_size= 0.025,
     window_stride= 0.01,
     window= "hann",
-    features= &n_mels 64,
+    features= 64,
     frame_splicing= 1,
     dither= 0.00001,
-    stft_conv= true,
     n_fft= 512,
 )
 assert args.model in ['Res8', 'Res15', 'Quartz']
