@@ -34,10 +34,10 @@ args = parser.parse_args()
 
 
 os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
-manifests = json.load(open('manifests.json', 'r'))
+manifests = json.load(open('/content/triplet_loss_kws/manifests.json', 'r'))
 data_dir = '.'
 
-background_dataset = data_dir + '/google_dataset_v2/google_speech_recognition_v2/background_manifest.json'
+# background_dataset = data_dir + '/google_dataset_v2/google_speech_recognition_v2/background_manifest.json'
 train_dataset = manifests[args.manifest]['train']
 val_dataset = manifests[args.manifest]['dev']
 
