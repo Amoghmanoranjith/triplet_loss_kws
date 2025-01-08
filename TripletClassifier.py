@@ -42,7 +42,7 @@ train_dataset = manifests[args.manifest]['train']
 val_dataset = manifests[args.manifest]['dev']
 
 yaml = YAML(typ="safe")
-with open(f"configs/words{args.manifest}.yaml") as f:
+with open(f"/content/triplet_loss_kws/configs/words{args.manifest}.yaml") as f:
     jasper_params = yaml.load(f)
 
 labels = jasper_params['labels']
@@ -55,7 +55,7 @@ weight_decay = 0.001
 num_classes = len(labels)
 
 neural_factory = nemo.core.NeuralModuleFactory(
-    log_dir=data_dir + '/runs/' + args.name,
+    log_dir=data_dir + '/content/triplet_loss_kws/runs/' + args.name,
     create_tb_writer=True)
 tb_writer = neural_factory.tb_writer
 
