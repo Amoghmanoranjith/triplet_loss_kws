@@ -94,7 +94,7 @@ if args.model == 'Res8':
     encoder.restore_from(f'./runs/{args.enc_name}/checkpoints/Res8-STEP-{str(args.enc_step)}.pt')
 elif args.model == 'Res15':
     encoder = Res15(args.hidden_size).to('cuda')
-    encoder.restore_from(f'/content/triplet_loss_kws/runs/{args.enc_name}/checkpoints/Res15-STEP-{str(args.enc_step)}.pt')
+    encoder.restore_from(f'/content/triplet_loss_kws/runs/res15_35/checkpoints/Res15-STEP-14000.pt')
 elif args.model == 'Quartz':
     encoder = nemo_asr.JasperEncoder(**jasper_params["JasperEncoder"])
     fc = LinearLayer(64 * 256)  # TODO find shape from jasper_params
@@ -102,7 +102,7 @@ elif args.model == 'Quartz':
     fc.restore_from(f'./runs/{args.enc_name}/checkpoints/LinearLayer-STEP-{str(args.enc_step)}.pt')
     fc.freeze()
 encoder.freeze()
-
+/content/triplet_loss_kws/runs/res15_35/checkpoints/Res15-STEP-14000.pt
 l2_regularizer = L2Regularizer()
 decoder = ClassificationNet(num_classes, args.hidden_size).to('cuda')
 
