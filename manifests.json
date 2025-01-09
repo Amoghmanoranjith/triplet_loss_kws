@@ -15,9 +15,9 @@
     
     "35":
     {
-        "train": "/content/google_speech_recognition_v2/train_manifest.json",
-        "dev":"/content/google_speech_recognition_v2/validation_manifest.json",
-        "test":"/content/google_speech_recognition_v2/test_manifest.json"    
+        "train": "/kaggle/working/google_speech_recognition_v2/train_manifest.json",
+        "dev":"/kaggle/working/google_speech_recognition_v2/validation_manifest.json",
+        "test":"/kaggle/working/google_speech_recognition_v2/test_manifest.json"    
     },    
    
     
