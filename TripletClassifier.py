@@ -34,7 +34,7 @@ args = parser.parse_args()
 
 
 os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu)
-manifests = json.load(open('/content/triplet_loss_kws/manifests.json', 'r'))
+manifests = json.load(open('/kaggle/working/triplet_loss_kws/manifests.json', 'r'))
 data_dir = '.'
 
 # background_dataset = data_dir + '/google_dataset_v2/google_speech_recognition_v2/background_manifest.json'
@@ -42,7 +42,7 @@ train_dataset = manifests[args.manifest]['train']
 val_dataset = manifests[args.manifest]['dev']
 
 yaml = YAML(typ="safe")
-with open(f"/content/triplet_loss_kws/configs/words{args.manifest}.yaml") as f:
+with open(f"/kaggle/working/triplet_loss_kws/configs/words{args.manifest}.yaml") as f:
     jasper_params = yaml.load(f)
 
 labels = jasper_params['labels']
@@ -94,7 +94,7 @@ if args.model == 'Res8':
     encoder.restore_from(f'./runs/{args.enc_name}/checkpoints/Res8-STEP-{str(args.enc_step)}.pt')
 elif args.model == 'Res15':
     encoder = Res15(args.hidden_size).to('cuda')
-    encoder.restore_from(f'./runs/{args.enc_name}/checkpoints/Res15-STEP-{str(args.enc_step)}.pt')
+    encoder.restore_from(f'/kaggle/working/triplet_loss_kws/runs/res15_35/checkpoints/Res15-STEP-14000.pt')
 elif args.model == 'Quartz':
     encoder = nemo_asr.JasperEncoder(**jasper_params["JasperEncoder"])
     fc = LinearLayer(64 * 256)  # TODO find shape from jasper_params
